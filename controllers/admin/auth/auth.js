@@ -1,6 +1,7 @@
 const { where } = require('sequelize')
 const db=require('../../../models')
 const generateToken = require('../../../utils/token')
+const bcrypt = require('bcryptjs')
 
 const adminLogin=async(req,res)=>{
     try {
@@ -21,7 +22,8 @@ const adminLogin=async(req,res)=>{
 
         let isUserExist=await db.User.findOne({
             where:{
-                email
+                email,
+                role: 'admin'  // Ensure we're only checking admin users
             }
         })
         
@@ -32,7 +34,10 @@ const adminLogin=async(req,res)=>{
             });
         }
 
-        if(password != isUserExist.password){
+        // Use bcrypt to compare the password with the hashed password
+        const isPasswordValid = await bcrypt.compare(password, isUserExist.password);
+        
+        if(!isPasswordValid){
             return res.status(400).json({
                 success: false,
                 message: "Invalid credentials"
@@ -53,7 +58,8 @@ const adminLogin=async(req,res)=>{
             token: token,
             user: {
                 id: isUserExist.id,
-                email: isUserExist.email
+                email: isUserExist.email,
+                role: isUserExist.role
             }
         });
     } catch (error) {
