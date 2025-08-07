@@ -24,12 +24,12 @@ const createGuestOrder = async (req, res) => {
     // Calculate total from cart items
     const calculatedTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-    // Create shipment details
+    // Create shipment details with default values for optional fields
     const shipment = await db.shipmentDetail.create({
       user_id: null, // Guest user
-      country: shippingInfo.country,
-      state: shippingInfo.state,
-      zip_code: shippingInfo.zipCode,
+      country: shippingInfo.country || 'Pakistan', // Default to Pakistan
+      state: shippingInfo.state || shippingInfo.city || 'N/A', // Use city as state or default
+      zip_code: shippingInfo.zipCode || '00000', // Default zip code
       address: shippingInfo.address
     });
 
@@ -246,4 +246,4 @@ const getGuestOrdersByEmail = async (req, res) => {
   }
 };
 
-module.exports = { createGuestOrder, getGuestOrder, getGuestOrdersByEmail }; 
+module.exports = { createGuestOrder, getGuestOrder, getGuestOrdersByEmail };

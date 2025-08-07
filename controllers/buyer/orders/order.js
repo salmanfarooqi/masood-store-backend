@@ -40,12 +40,13 @@ const addOrder = async (req, res) => {
     // Calculate total amount from cart items
     const totalAmount = cartItems.reduce((sum, item) => sum + item.total, 0); // Assuming `total` is the price
 
-    // Create shipment details
+    // Create shipment details with default values for optional fields
     const shipment = await db.shipmentDetail.create({
       user_id: userId,
-      country: country,
-      state: state,
-      zip_code: zipCode,
+      country: country || 'Pakistan', // Default to Pakistan
+      state: state || 'N/A', // Default state
+      zip_code: zipCode || '00000', // Default zip code
+      address: req.body.address || 'N/A' // Add address field with default
     });
 
     let paymentRecord = null;
