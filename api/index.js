@@ -7,15 +7,27 @@ require('dotenv').config();
 // Basic middleware setup
 const cors = require('cors');
 
-// Enhanced CORS configuration for serverless
+// Enhanced CORS configuration for serverless - FIXED
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-frontend-domain.vercel.app', 'https://your-frontend-domain.com']
+    ? [
+        'https://masood-store.vercel.app',
+        'https://your-frontend-domain.vercel.app', 
+        'https://your-frontend-domain.com',
+        /\.vercel\.app$/,
+        /localhost/
+      ]
     : true,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
 
 // Enable JSON body parsing with limits
 app.use(express.json({ limit: '10mb' }));
@@ -24,6 +36,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log('Origin:', req.headers.origin);
+  console.log('User-Agent:', req.headers['user-agent']);
   next();
 });
 
@@ -117,6 +131,183 @@ app.get('/packages', (req, res) => {
   });
 });
 
+// Migration endpoint to run pending migrations
+app.get('/migrate', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database not initialized',
+        error: 'Database connection not available'
+      });
+    }
+
+    console.log('Starting migration process...');
+    
+    // Import Umzug for migrations
+    const { Umzug, SequelizeStorage } = require('umzug');
+    const path = require('path');
+    
+    // Create Umzug instance
+    const umzug = new Umzug({
+      migrations: {
+        glob: path.join(__dirname, '../migrations/*.js'),
+        resolve: ({ name, path, context }) => {
+          const migration = require(path);
+          return {
+            name,
+            up: async () => migration.up(context.queryInterface, context.Sequelize),
+            down: async () => migration.down(context.queryInterface, context.Sequelize),
+          };
+        },
+      },
+      context: {
+        queryInterface: db.sequelize.getQueryInterface(),
+        Sequelize: db.Sequelize,
+      },
+      storage: new SequelizeStorage({
+        sequelize: db.sequelize,
+      }),
+      logger: console,
+    });
+
+    // Check pending migrations
+    const pendingMigrations = await umzug.pending();
+    console.log('Pending migrations:', pendingMigrations.map(m => m.name));
+
+    if (pendingMigrations.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending migrations',
+        executed: [],
+        pending: []
+      });
+    }
+
+    // Run pending migrations
+    const executedMigrations = await umzug.up();
+    
+    console.log('Migrations executed successfully:', executedMigrations.map(m => m.name));
+    
+    res.json({
+      success: true,
+      message: 'Migrations executed successfully',
+      executed: executedMigrations.map(m => m.name),
+      pending: []
+    });
+
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Migration failed',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Check migration status endpoint
+app.get('/migration-status', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database not initialized'
+      });
+    }
+
+    const { Umzug, SequelizeStorage } = require('umzug');
+    const path = require('path');
+    
+    const umzug = new Umzug({
+      migrations: {
+        glob: path.join(__dirname, '../migrations/*.js'),
+        resolve: ({ name, path, context }) => {
+          const migration = require(path);
+          return {
+            name,
+            up: async () => migration.up(context.queryInterface, context.Sequelize),
+            down: async () => migration.down(context.queryInterface, context.Sequelize),
+          };
+        },
+      },
+      context: {
+        queryInterface: db.sequelize.getQueryInterface(),
+        Sequelize: db.Sequelize,
+      },
+      storage: new SequelizeStorage({
+        sequelize: db.sequelize,
+      }),
+      logger: console,
+    });
+
+    const executedMigrations = await umzug.executed();
+    const pendingMigrations = await umzug.pending();
+
+    res.json({
+      success: true,
+      executed: executedMigrations.map(m => m.name),
+      pending: pendingMigrations.map(m => m.name),
+      total_migrations: executedMigrations.length + pendingMigrations.length
+    });
+
+  } catch (error) {
+    console.error('Migration status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check migration status',
+      error: error.message
+    });
+  }
+});
+
+// Add this temporary endpoint to manually add the missing column (quick fix)
+app.get('/fix-trending-column', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database not initialized'
+      });
+    }
+
+    const queryInterface = db.sequelize.getQueryInterface();
+    
+    // Check if column exists
+    const tableDescription = await queryInterface.describeTable('products');
+    
+    if (tableDescription.is_trending) {
+      return res.json({
+        success: true,
+        message: 'is_trending column already exists',
+        column_exists: true
+      });
+    }
+
+    // Add the column
+    await queryInterface.addColumn('products', 'is_trending', {
+      type: db.Sequelize.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    });
+
+    res.json({
+      success: true,
+      message: 'is_trending column added successfully',
+      column_exists: true
+    });
+
+  } catch (error) {
+    console.error('Fix trending column error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add is_trending column',
+      error: error.message
+    });
+  }
+});
+
 // Detailed health check route
 app.get('/health', async (req, res) => {
   const healthStatus = {
@@ -202,17 +393,18 @@ app.get('/db-status', async (req, res) => {
 // Initialize database with proper error handling
 const initializeDatabase = () => {
   try {
-    console.log('Starting database initialization...');
     initializationState.database = 'initializing';
+    console.log('Initializing database...');
     
-    // Check if pg package is available first
     if (!checkPgPackage()) {
-      throw new Error('pg package is not available');
+      throw new Error('pg package not available');
     }
     
     db = require('../models');
     console.log('Database models loaded successfully');
+    
     initializationState.database = 'initialized';
+    console.log('Database initialization completed');
     return true;
   } catch (error) {
     console.error('Database initialization failed:', error);
@@ -225,172 +417,88 @@ const initializeDatabase = () => {
 // Initialize routes with proper error handling
 const initializeRoutes = () => {
   try {
-    console.log('Starting routes initialization...');
     initializationState.routes = 'initializing';
+    console.log('Initializing routes...');
     
-    // Import routes with individual error handling
-    const authRouter = require('../routes/admin/auth/auth');
-    const categoryRouter = require('../routes/admin/categories/category');
-    const productRouter = require('../routes/admin/products/product');
-    const orderRouter = require('../routes/admin/orders/order');
-    const analyticsRouter = require('../routes/admin/analytics/analytics');
-    const { authenticateToken } = require('../midleware');
-    const { buyerauthRouter } = require('../routes/buyer/auth/auth');
-    const { cartRouter } = require('../routes/buyer/cart/cart');
-    const { guestCartRouter } = require('../routes/buyer/cart/guestCart');
-    const BuyerCategoryRouter = require('../routes/buyer/categories/category');
-    const buyerProductRouter = require('../routes/buyer/products/product');
-    const buyerPaymentRouter = require('../routes/buyer/payments/payment');
-    const buyerOrderRouter = require('../routes/buyer/orders/order');
-    const guestOrderRouter = require('../routes/buyer/orders/guestOrder');
-    const wishlistRouter = require('../routes/buyer/wishlist/wishlist');
-    const { getUser } = require('../controllers/buyer/auth/auth');
-
-    // Import collection and review routes
-    const adminCollectionRouter = require('../routes/admin/collections/collection');
-    const adminReviewRouter = require('../routes/admin/reviews/review');
-    const buyerCollectionRouter = require('../routes/buyer/collections/collection');
-    const buyerReviewRouter = require('../routes/buyer/reviews/review');
-
-    // Setup routes
-    app.use('/admin', authRouter); 
-    app.use('/admin', categoryRouter);
-    app.use('/admin', productRouter);
-    app.use('/admin', orderRouter);
-    app.use('/admin', analyticsRouter);
-    app.use('/admin/collections', adminCollectionRouter);
-    app.use('/admin/reviews', adminReviewRouter);
-
-    app.use('/buyer', buyerauthRouter);
-    app.use('/buyer', BuyerCategoryRouter);
-    app.use('/buyer', buyerProductRouter);
-    app.use('/buyer/collections', buyerCollectionRouter);
-    app.use('/buyer/reviews', buyerReviewRouter);
-    app.use('/buyer', guestCartRouter);
-    app.use('/buyer', guestOrderRouter);
-    app.use('/buyer', authenticateToken, cartRouter);
-    app.use('/buyer', authenticateToken, buyerPaymentRouter);
-    app.use('/buyer', authenticateToken, buyerOrderRouter);
-    app.use('/buyer/wishlist', authenticateToken, wishlistRouter);
-    app.use('/buyer/profile', authenticateToken, getUser);
+    if (!db) {
+      throw new Error('Database not initialized');
+    }
     
+    // Import and use routes
+    const adminRoutes = require('../routes/admin');
+    const buyerRoutes = require('../routes/buyer');
+    
+    app.use('/admin', adminRoutes);
+    app.use('/buyer', buyerRoutes);
+    
+    console.log('Routes initialized successfully');
     initializationState.routes = 'initialized';
-    console.log('Routes setup completed successfully');
     return true;
   } catch (error) {
-    console.error('Error setting up routes:', error);
+    console.error('Routes initialization failed:', error);
     initializationState.routes = 'failed';
     initializationState.errors.push(`Routes: ${error.message}`);
     return false;
   }
 };
 
-// Initialize Cloudinary with error handling
+// Cloudinary initialization
 const initializeCloudinary = () => {
   try {
-    console.log('Starting Cloudinary initialization...');
     initializationState.cloudinary = 'initializing';
+    console.log('Initializing Cloudinary...');
     
     const cloudinary = require('cloudinary').v2;
+    
     cloudinary.config({
-      cloud_name: 'dwtru703l',
-      api_key: '964741116272599',
-      api_secret: 'QckGC-axVOaemElOzmt50-rDepA'
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
     });
     
+    console.log('Cloudinary initialized successfully');
     initializationState.cloudinary = 'initialized';
-    console.log('Cloudinary configured successfully');
     return true;
   } catch (error) {
-    console.error('Cloudinary configuration failed:', error);
+    console.error('Cloudinary initialization failed:', error);
     initializationState.cloudinary = 'failed';
     initializationState.errors.push(`Cloudinary: ${error.message}`);
     return false;
   }
 };
 
-// Run initialization synchronously
-console.log('Starting serverless function initialization...');
+// Initialize everything
+console.log('Starting application initialization...');
 
-// Initialize Cloudinary first (least likely to fail)
+// Initialize database first
+if (initializeDatabase()) {
+  // Then initialize routes
+  initializeRoutes();
+}
+
+// Initialize Cloudinary (independent of database)
 initializeCloudinary();
 
-// Initialize database
-const dbInitialized = initializeDatabase();
-
-// Initialize routes (depends on database for some middleware)
-const routesInitialized = initializeRoutes();
-
-console.log(`Initialization complete - DB: ${dbInitialized}, Routes: ${routesInitialized}, Cloudinary: ${initializationState.cloudinary}`);
-
-// Global error handler for serverless
-app.use((err, req, res, next) => {
-  console.error('Global error handler:', err);
+// Global error handler
+app.use((error, req, res, next) => {
+  console.error('Global error handler:', error);
   res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
-    timestamp: new Date().toISOString(),
-    initialization: initializationState
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+    timestamp: new Date().toISOString()
   });
 });
 
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
-    error: 'Route not found',
+    message: 'Route not found',
     path: req.originalUrl,
     method: req.method,
-    timestamp: new Date().toISOString(),
-    available_routes: initializationState.routes === 'initialized' ? 'Routes are available' : 'Routes not initialized'
+    timestamp: new Date().toISOString()
   });
 });
 
-// Export the Express app for Vercel
+console.log('Application setup completed');
+
 module.exports = app;
-
-
-// Add this temporary endpoint to manually add the missing column
-app.get('/fix-trending-column', async (req, res) => {
-  try {
-    if (!db) {
-      return res.status(503).json({
-        success: false,
-        message: 'Database not initialized'
-      });
-    }
-
-    const queryInterface = db.sequelize.getQueryInterface();
-    
-    // Check if column exists
-    const tableDescription = await queryInterface.describeTable('products');
-    
-    if (tableDescription.is_trending) {
-      return res.json({
-        success: true,
-        message: 'is_trending column already exists',
-        column_exists: true
-      });
-    }
-
-    // Add the column
-    await queryInterface.addColumn('products', 'is_trending', {
-      type: db.Sequelize.BOOLEAN,
-      allowNull: false,
-      defaultValue: false
-    });
-
-    res.json({
-      success: true,
-      message: 'is_trending column added successfully',
-      column_exists: true
-    });
-
-  } catch (error) {
-    console.error('Fix trending column error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to add is_trending column',
-      error: error.message
-    });
-  }
-});
