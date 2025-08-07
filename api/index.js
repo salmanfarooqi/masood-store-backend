@@ -32,10 +32,27 @@ let initializationState = {
   database: 'not_started',
   routes: 'not_started',
   cloudinary: 'not_started',
-  errors: []
+  errors: [],
+  pgCheck: 'not_checked'
 };
 
 let db = null;
+
+// Check if pg package is available
+const checkPgPackage = () => {
+  try {
+    initializationState.pgCheck = 'checking';
+    const pg = require('pg');
+    console.log('pg package found:', pg.version || 'version unknown');
+    initializationState.pgCheck = 'available';
+    return true;
+  } catch (error) {
+    console.error('pg package check failed:', error.message);
+    initializationState.pgCheck = 'missing';
+    initializationState.errors.push(`pg package: ${error.message}`);
+    return false;
+  }
+};
 
 // Basic health check route (no database dependency)
 app.get('/', (req, res) => {
@@ -69,6 +86,37 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Package check endpoint
+app.get('/packages', (req, res) => {
+  const packageStatus = {
+    pg: 'unknown',
+    sequelize: 'unknown',
+    express: 'available',
+    cors: 'available'
+  };
+
+  try {
+    require('pg');
+    packageStatus.pg = 'available';
+  } catch (e) {
+    packageStatus.pg = 'missing: ' + e.message;
+  }
+
+  try {
+    require('sequelize');
+    packageStatus.sequelize = 'available';
+  } catch (e) {
+    packageStatus.sequelize = 'missing: ' + e.message;
+  }
+
+  res.json({
+    packages: packageStatus,
+    node_version: process.version,
+    platform: process.platform,
+    arch: process.arch
+  });
+});
+
 // Detailed health check route
 app.get('/health', async (req, res) => {
   const healthStatus = {
@@ -78,6 +126,7 @@ app.get('/health', async (req, res) => {
     routes: initializationState.routes,
     database: initializationState.database,
     cloudinary: initializationState.cloudinary,
+    pgCheck: initializationState.pgCheck,
     errors: initializationState.errors
   };
 
@@ -130,7 +179,8 @@ app.get('/db-status', async (req, res) => {
     return res.status(503).json({ 
       status: 'disconnected',
       error: 'Database not initialized',
-      initialization_state: initializationState.database
+      initialization_state: initializationState.database,
+      pg_check: initializationState.pgCheck
     });
   }
 
@@ -154,6 +204,11 @@ const initializeDatabase = () => {
   try {
     console.log('Starting database initialization...');
     initializationState.database = 'initializing';
+    
+    // Check if pg package is available first
+    if (!checkPgPackage()) {
+      throw new Error('pg package is not available');
+    }
     
     db = require('../models');
     console.log('Database models loaded successfully');
