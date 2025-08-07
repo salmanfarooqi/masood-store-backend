@@ -347,3 +347,50 @@ app.use('*', (req, res) => {
 
 // Export the Express app for Vercel
 module.exports = app;
+
+
+// Add this temporary endpoint to manually add the missing column
+app.get('/fix-trending-column', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database not initialized'
+      });
+    }
+
+    const queryInterface = db.sequelize.getQueryInterface();
+    
+    // Check if column exists
+    const tableDescription = await queryInterface.describeTable('products');
+    
+    if (tableDescription.is_trending) {
+      return res.json({
+        success: true,
+        message: 'is_trending column already exists',
+        column_exists: true
+      });
+    }
+
+    // Add the column
+    await queryInterface.addColumn('products', 'is_trending', {
+      type: db.Sequelize.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    });
+
+    res.json({
+      success: true,
+      message: 'is_trending column added successfully',
+      column_exists: true
+    });
+
+  } catch (error) {
+    console.error('Fix trending column error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add is_trending column',
+      error: error.message
+    });
+  }
+});
