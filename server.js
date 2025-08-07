@@ -87,9 +87,29 @@ app.get('/health', async (req, res) => {
       )
     ]);
     
+    // Test Product model
+    let productCount = 0;
+    let productModelStatus = 'unknown';
+    
+    try {
+      if (db.product) {
+        productCount = await db.product.count();
+        productModelStatus = 'available';
+      } else {
+        productModelStatus = 'not_available';
+      }
+    } catch (error) {
+      productModelStatus = 'error: ' + error.message;
+    }
+    
     res.json({ 
       status: 'healthy', 
       database: 'connected',
+      product_model: productModelStatus,
+      product_count: productCount,
+      available_models: Object.keys(db).filter(key => 
+        key !== 'sequelize' && key !== 'Sequelize' && key !== 'healthCheck' && key !== 'closeConnection'
+      ),
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV
     });
@@ -340,8 +360,27 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     // Test database connection first
+    console.log('Testing database connection...');
     await db.sequelize.authenticate();
     console.log('Database connection established successfully.');
+    
+    // Verify models are loaded
+    console.log('Available models:', Object.keys(db).filter(key => 
+      key !== 'sequelize' && key !== 'Sequelize' && key !== 'healthCheck' && key !== 'closeConnection'
+    ));
+    
+    // Test Product model specifically
+    if (db.product) {
+      console.log('Product model is available');
+      try {
+        const count = await db.product.count();
+        console.log(`Database has ${count} products`);
+      } catch (error) {
+        console.error('Error counting products:', error.message);
+      }
+    } else {
+      console.error('Product model is not available!');
+    }
     
     // Only sync database in development
     if (process.env.NODE_ENV === 'development') {

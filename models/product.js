@@ -42,11 +42,11 @@ module.exports = (sequelize, DataTypes) => {
     id: {
       allowNull: false,
       primaryKey: true,
-      type: DataTypes.STRING,  // Use STRING for custom format if you prefer
-      defaultValue: Sequelize.literal("CONCAT('PRODUICTiD-', NEXTVAL('product_id_seq'))")  // Automatically generate a unique ID like 'CARTID-1'
+      type: DataTypes.UUID,
+      defaultValue: Sequelize.UUIDV4
     },
     name: DataTypes.STRING,
-    image:DataTypes.ARRAY(DataTypes.STRING),
+    image: DataTypes.ARRAY(DataTypes.STRING),
     description: DataTypes.TEXT,
     parent_category: DataTypes.STRING,
     child_category: DataTypes.STRING,
