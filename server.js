@@ -79,7 +79,7 @@ app.get('/api/test', (req, res) => {
 // Enhanced health check route for serverless
 app.get('/health', async (req, res) => {
   try {
-    // Test database connection with timeout
+    // Test database connection with shorter timeout for serverless
     const connectionTest = await Promise.race([
       db.sequelize.authenticate(),
       new Promise((_, reject) => 
@@ -115,12 +115,18 @@ app.get('/health', async (req, res) => {
     });
   } catch (error) {
     console.error('Health check failed:', error);
-    res.status(500).json({ 
-      status: 'unhealthy', 
+    
+    // In serverless, return partial health status instead of 500
+    res.status(200).json({ 
+      status: 'degraded', 
       database: 'disconnected',
       error: error.message,
+      available_models: Object.keys(db).filter(key => 
+        key !== 'sequelize' && key !== 'Sequelize' && key !== 'healthCheck' && key !== 'closeConnection'
+      ),
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV
+      environment: process.env.NODE_ENV,
+      note: 'Server is running but database connection failed'
     });
   }
 });

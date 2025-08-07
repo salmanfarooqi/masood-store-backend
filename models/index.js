@@ -6,78 +6,89 @@ const Sequelize = require('sequelize');
 const process = require('process');
 const basename = path.basename(__filename);
 const env = process.env.NODE_ENV || 'development';
+console.log('Loading database configuration for environment:', env);
 const config = require(__dirname + '/../config/config.js')[env];
+console.log('Database config loaded:', {
+  database: config.database,
+  host: config.host,
+  port: config.port,
+  username: config.username,
+  dialect: config.dialect
+});
 const db = {};
 
 let sequelize;
 
-// Enhanced database connection setup with error handling
+// Enhanced database connection setup with error handling for serverless
 const setupDatabase = () => {
   try {
-    if (config.use_env_variable) {
-      sequelize = new Sequelize(process.env[config.use_env_variable], config);
-    } else {
-      sequelize = new Sequelize(config.database, config.username, config.password, {
-        ...config,
-        // Enhanced connection pooling for serverless
-        pool: {
-          max: process.env.NODE_ENV === 'production' ? 2 : 5,
-          min: 0,
-          acquire: 60000,
-          idle: 10000,
-          handleDisconnects: true
+    console.log('Setting up database with config:', {
+      database: config.database,
+      host: config.host,
+      port: config.port,
+      username: config.username
+    });
+    
+    // Always use direct configuration, not environment variables
+    sequelize = new Sequelize(config.database, config.username, config.password, {
+      ...config,
+      // Enhanced connection pooling for serverless
+      pool: {
+        max: 1, // Very low for serverless
+        min: 0,
+        acquire: 30000, // Reduced timeout
+        idle: 5000,
+        handleDisconnects: true
+      },
+      retry: {
+        max: 2, // Reduced retries
+        backoffBase: 1000,
+        backoffExponent: 1.5
+      },
+      // Connection event handlers
+      hooks: {
+        beforeConnect: async (config) => {
+          console.log('Attempting database connection...');
         },
-        retry: {
-          max: 3,
-          backoffBase: 1000,
-          backoffExponent: 1.5
-        },
-        // Connection event handlers
-        hooks: {
-          beforeConnect: async (config) => {
-            console.log('Attempting database connection...');
-          },
-          afterConnect: async (connection) => {
-            console.log('Database connection established successfully.');
-          }
+        afterConnect: async (connection) => {
+          console.log('Database connection established successfully.');
         }
-      });
-    }
+      },
+      // Disable logging in production
+      logging: false,
+      // Lazy connection for serverless
+      dialectOptions: {
+        ...config.dialectOptions,
+        // Shorter timeouts for serverless
+        connectTimeout: 30000,
+        acquireTimeout: 30000,
+        timeout: 30000
+      }
+    });
 
-    // Test the connection with timeout
-    const testConnection = async () => {
-      try {
-        await Promise.race([
-          sequelize.authenticate(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Database connection timeout')), 10000)
-          )
-        ]);
-        console.log('Database connection has been established successfully.');
-      } catch (err) {
-        console.error('Unable to connect to the database:', err);
-        // Don't throw error in production to allow serverless to start
-        if (process.env.NODE_ENV === 'development') {
+    // Don't test connection immediately in production (serverless)
+    if (process.env.NODE_ENV === 'development') {
+      const testConnection = async () => {
+        try {
+          await Promise.race([
+            sequelize.authenticate(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Database connection timeout')), 10000)
+            )
+          ]);
+          console.log('Database connection has been established successfully.');
+        } catch (err) {
+          console.error('Unable to connect to the database:', err);
           throw err;
         }
-      }
-    };
-
-    // Test connection immediately
-    testConnection();
+      };
+      testConnection();
+    }
 
     return sequelize;
   } catch (error) {
     console.error('Database setup failed:', error);
-    if (process.env.NODE_ENV === 'development') {
-      throw error;
-    }
-    // In production, return a mock sequelize to prevent crashes
-    return {
-      authenticate: () => Promise.reject(new Error('Database not configured')),
-      sync: () => Promise.resolve(),
-      close: () => Promise.resolve()
-    };
+    throw error;
   }
 };
 

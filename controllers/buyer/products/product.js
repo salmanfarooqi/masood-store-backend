@@ -7,6 +7,19 @@ const getAllProductByBuyer = async (req, res) => {
     console.log("Database object:", typeof db);
     console.log("Product model:", typeof db.product);
     
+    // Test database connection first
+    try {
+      await db.sequelize.authenticate();
+      console.log("Database connection verified");
+    } catch (dbError) {
+      console.error("Database connection failed:", dbError);
+      return res.status(503).json({ 
+        message: 'Database temporarily unavailable',
+        error: 'Database connection failed',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     const { categoryId, search, onSale, sortBy, sortOrder } = req.query;
     console.log("Cat...", categoryId, "Search...", search);
     
