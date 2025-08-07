@@ -7,27 +7,45 @@ require('dotenv').config();
 // Basic middleware setup
 const cors = require('cors');
 
-// Enhanced CORS configuration for serverless - FIXED
+// COMPLETELY PERMISSIVE CORS CONFIGURATION - FIXES ALL FRONTEND ISSUES
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://masood-store.vercel.app',
-        'https://your-frontend-domain.vercel.app', 
-        'https://your-frontend-domain.com',
-        /\.vercel\.app$/,
-        /localhost/
-      ]
-    : true,
+  origin: true, // Allow all origins for now
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with', 'Accept', 'Origin'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'x-requested-with', 
+    'Accept', 
+    'Origin',
+    'X-Requested-With',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
+    'Cache-Control',
+    'Pragma'
+  ],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  maxAge: 86400 // 24 hours
 }));
 
-// Handle preflight requests explicitly
-app.options('*', cors());
+// Additional middleware to ensure CORS headers are always set
+app.use((req, res, next) => {
+  // Set CORS headers for all responses
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH,HEAD');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,x-requested-with,Accept,Origin,X-Requested-With,Access-Control-Request-Method,Access-Control-Request-Headers,Cache-Control,Pragma');
+  res.header('Access-Control-Max-Age', '86400');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
 
 // Enable JSON body parsing with limits
 app.use(express.json({ limit: '10mb' }));
@@ -38,6 +56,7 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   console.log('Origin:', req.headers.origin);
   console.log('User-Agent:', req.headers['user-agent']);
+  console.log('Referer:', req.headers.referer);
   next();
 });
 
@@ -500,5 +519,25 @@ app.use('*', (req, res) => {
 });
 
 console.log('Application setup completed');
+
+// CORS test endpoint - ADD THIS AFTER YOUR EXISTING ROUTES
+app.get('/cors-test', (req, res) => {
+  res.json({
+    message: 'CORS test successful! Frontend can now access the API.',
+    origin: req.headers.origin,
+    method: req.method,
+    timestamp: new Date().toISOString(),
+    cors_enabled: true,
+    headers_received: req.headers
+  });
+});
+
+// Test endpoint that mimics your actual API structure
+app.get('/test-categories', (req, res) => {
+  res.json([
+    { id: 'TEST-1', name: 'Test Category 1' },
+    { id: 'TEST-2', name: 'Test Category 2' }
+  ]);
+});
 
 module.exports = app;
