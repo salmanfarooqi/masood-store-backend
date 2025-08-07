@@ -1,152 +1,103 @@
 const express = require('express');
 const app = express();
-require('dotenv').config();
+const { Sequelize } = require('sequelize');
 
-// Basic middleware
-app.use(express.json());
-
-// CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
-
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  next();
-});
-
-// Test database connection
-const testDatabase = async () => {
-  try {
-    const { Sequelize } = require('sequelize');
-    
-    if (!process.env.DB_HOST || !process.env.DB_DATABASE || !process.env.DB_USERNAME || !process.env.DB_PASSWORD) {
-      return { status: 'not_configured', message: 'Database environment variables not set' };
-    }
-    
-    const sequelize = new Sequelize(
-      process.env.DB_DATABASE,
-      process.env.DB_USERNAME,
-      process.env.DB_PASSWORD,
-      {
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT || 5432,
-        dialect: 'postgres',
-        logging: false,
-        dialectOptions: {
-          ssl: {
-            require: true,
-            rejectUnauthorized: false
-          }
-        },
-        pool: {
-          max: 1,
-          min: 0,
-          acquire: 30000,
-          idle: 10000
-        }
-      }
-    );
-    
-    await sequelize.authenticate();
-    await sequelize.close();
-    
-    return { status: 'connected', message: 'Database connection successful' };
-  } catch (error) {
-    return { status: 'error', message: error.message };
-  }
+// Hardcoded database configuration (no environment variables)
+const DB_CONFIG = {
+  username: 'neondb_owner',
+  password: 'npg_ZnRBm0zsAlC5',
+  database: 'neondb',
+  host: 'ep-noisy-block-ab07awdx-pooler.eu-west-2.aws.neon.tech',
+  port: 5432
 };
 
-// Routes
+// Create Sequelize instance with hardcoded config
+const sequelize = new Sequelize(DB_CONFIG.database, DB_CONFIG.username, DB_CONFIG.password, {
+  host: DB_CONFIG.host,
+  port: DB_CONFIG.port,
+  dialect: 'postgres',
+  logging: false,
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false
+    }
+  },
+  pool: {
+    max: 2,
+    min: 0,
+    acquire: 60000,
+    idle: 10000
+  }
+});
+
+app.use(express.json());
+
+// Test route
 app.get('/', (req, res) => {
   res.json({
-    message: 'Test deployment server is working!',
+    message: 'Test deployment server is running!',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-    vercel: !!process.env.VERCEL
+    environment: process.env.NODE_ENV || 'development',
+    database: 'configured with hardcoded values'
   });
 });
 
-app.get('/test', (req, res) => {
-  res.json({
-    message: 'Test endpoint working',
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/env', (req, res) => {
-  res.json({
-    NODE_ENV: process.env.NODE_ENV,
-    VERCEL: !!process.env.VERCEL,
-    DB_HOST: process.env.DB_HOST ? 'SET' : 'NOT SET',
-    DB_DATABASE: process.env.DB_DATABASE ? 'SET' : 'NOT SET',
-    DB_USERNAME: process.env.DB_USERNAME ? 'SET' : 'NOT SET',
-    DB_PASSWORD: process.env.DB_PASSWORD ? 'SET' : 'NOT SET',
-    DB_PORT: process.env.DB_PORT || '5432',
-    JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT SET',
-    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? 'SET' : 'NOT SET'
-  });
-});
-
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-app.get('/db-test', async (req, res) => {
+// Database connection test
+app.get('/test-db', async (req, res) => {
   try {
-    const result = await testDatabase();
+    await sequelize.authenticate();
     res.json({
-      timestamp: new Date().toISOString(),
-      ...result
+      status: 'success',
+      message: 'Database connection successful!',
+      database: DB_CONFIG.database,
+      host: DB_CONFIG.host,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
+    console.error('Database connection failed:', error);
     res.status(500).json({
       status: 'error',
-      message: error.message,
+      message: 'Database connection failed',
+      error: error.message,
       timestamp: new Date().toISOString()
     });
   }
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Route not found',
-    path: req.path,
-    method: req.method,
+// Environment test
+app.get('/test-env', (req, res) => {
+  res.json({
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    PORT: process.env.PORT || 5000,
+    VERCEL: process.env.VERCEL || false,
+    database: 'hardcoded configuration',
     timestamp: new Date().toISOString()
   });
 });
 
 const PORT = process.env.PORT || 5000;
 
-// Only start server in development
+// Start server
+const startServer = async () => {
+  try {
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('Database connection established successfully.');
+    
+    app.listen(PORT, () => {
+      console.log(`Test server is running on port ${PORT}`);
+      console.log(`Database: ${DB_CONFIG.database} on ${DB_CONFIG.host}`);
+    });
+  } catch (error) {
+    console.error('Server startup failed:', error);
+    process.exit(1);
+  }
+};
+
+// Only start server if not in serverless environment
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`Test deployment server running on port ${PORT}`);
-  });
+  startServer();
 }
 
 module.exports = app; 

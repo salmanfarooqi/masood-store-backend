@@ -72,7 +72,7 @@ app.get('/api/test', (req, res) => {
     message: 'API is working!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    database: process.env.DB_HOST ? 'configured' : 'not configured'
+    database: 'configured'
   });
 });
 
@@ -160,9 +160,9 @@ setupRoutes();
 const setupCloudinary = () => {
   try {
     cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dwtru703l',
-      api_key: process.env.CLOUDINARY_API_KEY || '964741116272599',
-      api_secret: process.env.CLOUDINARY_API_SECRET || 'QckGC-axVOaemElOzmt50-rDepA'
+      cloud_name: 'dwtru703l',
+      api_key: '964741116272599',
+      api_secret: 'QckGC-axVOaemElOzmt50-rDepA'
     });
     console.log('Cloudinary configured successfully');
   } catch (error) {

@@ -1,13 +1,22 @@
 require('dotenv').config();
 
+// Database configuration with hardcoded values (no environment variables)
+const DB_CONFIG = {
+  username: 'neondb_owner',
+  password: 'npg_ZnRBm0zsAlC5',
+  database: 'neondb',
+  host: 'ep-noisy-block-ab07awdx-pooler.eu-west-2.aws.neon.tech',
+  port: 5432
+};
+
 // Only log in development
 if (process.env.NODE_ENV === 'development') {
-  console.log('Environment Variables:');
-  console.log('DB_USERNAME:', process.env.DB_USERNAME);
-  console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***SET***' : '***NOT SET***');
-  console.log('DB_DATABASE:', process.env.DB_DATABASE);
-  console.log('DB_HOST:', process.env.DB_HOST);
-  console.log('DB_PORT:', process.env.DB_PORT);
+  console.log('Database Configuration:');
+  console.log('DB_USERNAME:', DB_CONFIG.username);
+  console.log('DB_PASSWORD:', DB_CONFIG.password ? '***SET***' : '***NOT SET***');
+  console.log('DB_DATABASE:', DB_CONFIG.database);
+  console.log('DB_HOST:', DB_CONFIG.host);
+  console.log('DB_PORT:', DB_CONFIG.port);
 }
 
 // Common configuration for all environments
@@ -47,11 +56,11 @@ const commonConfig = {
 
 module.exports = {
   development: {
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
+    username: DB_CONFIG.username,
+    password: DB_CONFIG.password,
+    database: DB_CONFIG.database,
+    host: DB_CONFIG.host,
+    port: DB_CONFIG.port,
     ...commonConfig,
     pool: {
       ...commonConfig.pool,
@@ -59,11 +68,11 @@ module.exports = {
     }
   },
   test: {
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
+    username: DB_CONFIG.username,
+    password: DB_CONFIG.password,
+    database: DB_CONFIG.database,
+    host: DB_CONFIG.host,
+    port: DB_CONFIG.port,
     ...commonConfig,
     pool: {
       ...commonConfig.pool,
@@ -71,11 +80,11 @@ module.exports = {
     }
   },
   production: {
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
+    username: DB_CONFIG.username,
+    password: DB_CONFIG.password,
+    database: DB_CONFIG.database,
+    host: DB_CONFIG.host,
+    port: DB_CONFIG.port,
     ...commonConfig,
     pool: {
       ...commonConfig.pool,
