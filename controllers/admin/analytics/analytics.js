@@ -10,7 +10,7 @@ const getDashboardStats = async (req, res) => {
         // Total counts
         const totalProducts = await db.product.count();
         const totalOrders = await db.Order.count();
-        const totalUsers = await db.user.count();
+        const totalUsers = await db.User.count();
         const totalCategories = await db.parentCategory.count();
 
         // Revenue calculations
