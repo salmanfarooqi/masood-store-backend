@@ -256,8 +256,10 @@ app.post('/upload', (req, res, next) => {
     }
     
     res.json({
-      message: 'File uploaded successfully!',
-      url: req.file.path
+      success: true,
+      url: req.file.path,
+      filename: req.file.originalname,
+      message: 'File uploaded successfully!'
     });
   });
 });
@@ -279,8 +281,10 @@ app.post('/upload-video', (req, res, next) => {
     }
     
     res.json({
-      message: 'Video uploaded successfully!',
-      url: req.file.path
+      success: true,
+      url: req.file.path,
+      filename: req.file.originalname,
+      message: 'Video uploaded successfully!'
     });
   });
 });

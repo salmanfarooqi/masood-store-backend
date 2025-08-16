@@ -313,6 +313,164 @@ app.get('/test-categories', (req, res) => {
   ]);
 });
 
+// Upload routes
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
+
+// Configure Cloudinary with hardcoded values for Vercel deployment
+cloudinary.config({
+  cloud_name: 'dwtru703l',
+  api_key: '964741116272599',
+  api_secret: 'QckGC-axVOaemElOzmt50-rDepA'
+});
+
+// Set up Cloudinary storage for multer
+let storage, videoStorage, upload, uploadVideo;
+
+try {
+  console.log('Setting up Cloudinary storage...');
+  console.log('Cloudinary config:', {
+    cloud_name: cloudinary.config().cloud_name,
+    api_key: cloudinary.config().api_key ? 'SET' : 'NOT SET',
+    api_secret: cloudinary.config().api_secret ? 'SET' : 'NOT SET'
+  });
+  
+  storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'uploads',
+      public_id: (req, file) => file.originalname.split('.')[0],
+      resource_type: 'image'
+    }
+  });
+
+  videoStorage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'videos',
+      public_id: (req, file) => file.originalname.split('.')[0],
+      resource_type: 'video'
+    }
+  });
+
+  upload = multer({ 
+    storage: storage,
+    limits: {
+      fileSize: 10 * 1024 * 1024 // 10MB limit
+    }
+  });
+  
+  uploadVideo = multer({ 
+    storage: videoStorage,
+    limits: {
+      fileSize: 100 * 1024 * 1024 // 100MB limit for videos
+    }
+  });
+  
+  console.log('Multer storage configured successfully');
+  console.log('upload middleware:', upload ? 'configured' : 'not configured');
+  console.log('uploadVideo middleware:', uploadVideo ? 'configured' : 'not configured');
+} catch (error) {
+  console.error('Multer storage configuration failed:', error);
+  console.error('Error details:', error.stack);
+}
+
+// Route to handle image upload
+app.post('/upload', (req, res, next) => {
+  console.log('Image upload endpoint hit');
+  console.log('Request headers:', req.headers);
+  
+  if (!upload) {
+    console.error('upload middleware not configured');
+    return res.status(500).json({ error: 'Upload service not configured' });
+  }
+  
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      console.error('Image upload error:', err);
+      return res.status(400).json({ error: 'Image upload failed', details: err.message });
+    }
+    
+    if (!req.file) {
+      console.error('No image file in request');
+      return res.status(400).json({ error: 'No image uploaded!' });
+    }
+    
+    console.log('Image uploaded successfully:', req.file);
+    res.json({
+      success: true,
+      url: req.file.path,
+      filename: req.file.originalname,
+      message: 'Image uploaded successfully!',
+      type: 'image'
+    });
+  });
+});
+
+// Route to handle video upload
+app.post('/upload-video', (req, res, next) => {
+  console.log('Video upload endpoint hit');
+  console.log('Request headers:', req.headers);
+  console.log('Request body keys:', Object.keys(req.body || {}));
+  
+  if (!uploadVideo) {
+    console.error('uploadVideo middleware not configured');
+    return res.status(500).json({ error: 'Video upload service not configured' });
+  }
+  
+  uploadVideo.single('video')(req, res, (err) => {
+    if (err) {
+      console.error('Video upload error:', err);
+      return res.status(400).json({ error: 'Video upload failed', details: err.message });
+    }
+    
+    if (!req.file) {
+      console.error('No file in request');
+      return res.status(400).json({ error: 'No video uploaded!' });
+    }
+    
+    console.log('Video uploaded successfully:', req.file);
+    res.json({
+      success: true,
+      url: req.file.path,
+      filename: req.file.originalname,
+      message: 'Video uploaded successfully!'
+    });
+  });
+});
+
+// Route to handle transaction screenshot upload for guest orders
+app.post('/upload-transaction-screenshot', (req, res, next) => {
+  if (!upload) {
+    return res.status(500).json({ error: 'Upload service not configured' });
+  }
+  
+  upload.single('screenshot')(req, res, (err) => {
+    if (err) {
+      console.error('Screenshot upload error:', err);
+      return res.status(400).json({ 
+        success: false,
+        error: 'Screenshot upload failed', 
+        details: err.message 
+      });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'No screenshot uploaded!' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Transaction screenshot uploaded successfully!',
+      url: req.file.path
+    });
+  });
+});
+
 // Global error handler
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
@@ -331,11 +489,12 @@ app.use('*', (req, res) => {
     path: req.originalUrl,
     method: req.method,
     timestamp: new Date().toISOString(),
-    available_routes: {
-      admin: ['/admin/test', '/admin/login'],
-      buyer: ['/buyer/test', '/buyer/login'],
-      general: ['/', '/test', '/health', '/cors-test']
-    }
+          available_routes: {
+        admin: ['/admin/test', '/admin/login'],
+        buyer: ['/buyer/test', '/buyer/login'],
+        general: ['/', '/test', '/health', '/cors-test'],
+        upload: ['/upload', '/upload-video', '/upload-transaction-screenshot']
+      }
   });
 });
 
