@@ -171,7 +171,7 @@ const getAllCartProduct = async (req, res) => {
         {
           model: db.product,  // Include the Product model
           as: 'product',      // Alias for the relationship
-          attributes: ['id', 'name', 'price', 'image'] // Specify which product fields to include
+          attributes: ['id', 'name', 'price', 'image', 'colors', 'size', 'stock'] // Include variant fields for checkout
         }
       ]
     });
